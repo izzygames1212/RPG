@@ -1,141 +1,257 @@
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
+ <!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blue Lock 3D Career Mode</title>
+<style>
+body{margin:0;overflow:hidden;background:#081124;font-family:sans-serif;}
+canvas{display:block;}
+#startScreen,#modeSelect,#teamSelect,#keyBindScreen,#careerScreen{
+  position:absolute;top:0;left:0;width:100%;height:100%;display:flex;justify-content:center;align-items:center;color:white;font-size:24px;z-index:100;
+  background:#111;flex-direction:column;
+}
+button{padding:10px 20px;font-size:16px;cursor:pointer;margin:5px;}
+#hud{position:absolute;top:10px;left:10px;color:white;z-index:10;}
+</style>
+</head>
+<body>
 
-const keys = {};
+<div id="startScreen">
+  <h2>Blue Lock 3D Game</h2>
+  <button id="startButton">Start Game</button>
+</div>
 
-document.addEventListener("keydown", e => keys[e.code] = true);
-document.addEventListener("keyup", e => keys[e.code] = false);
+<div id="modeSelect" style="display:none;">
+  <h2>Select Game Mode</h2>
+  <button onclick="selectMode('Training')">Training</button>
+  <button onclick="selectMode('Match')">Match</button>
+  <button onclick="selectMode('Career')">Career</button>
+</div>
 
-class Fighter {
-  constructor(x, color, controls) {
-    this.x = x;
-    this.y = 460;
-    this.w = 50;
-    this.h = 80;
-    this.color = color;
-    this.health = 100;
-    this.vy = 0;
-    this.jump = false;
-    this.controls = controls;
-    this.attackCooldown = 0;
-  }
+<div id="teamSelect" style="display:none;">
+  <h2>Select Your Team</h2>
+  <button onclick="selectTeam('Red')">Red Team</button>
+  <button onclick="selectTeam('Blue')">Blue Team</button>
+  <button onclick="selectTeam('Yellow')">Yellow Team</button>
+</div>
 
-  update(opponent) {
-    // Movement
-    if (keys[this.controls.left]) this.x -= 4;
-    if (keys[this.controls.right]) this.x += 4;
+<div id="keyBindScreen" style="display:none;">
+  <h2>Set Your Controls</h2>
+  <p>Press a key for LEFT movement:</p>
+  <button id="bindLeft">Set Left</button>
+  <p>Press a key for RIGHT movement:</p>
+  <button id="bindRight">Set Right</button>
+  <p>Press a key for KICK/PASS:</p>
+  <button id="bindKick">Set Kick</button>
+  <button onclick="finishKeyBind()">Finish</button>
+</div>
 
-    // Jump
-    if (!this.jump && keys[this.controls.jump]) {
-      this.vy = -15;
-      this.jump = true;
-    }
+<div id="careerScreen" style="display:none;">
+  <h2>Career Mode</h2>
+  <p id="careerLevel">Level 1</p>
+  <button onclick="nextCareerLevel()">Next Level</button>
+</div>
 
-    this.vy += 1; // gravity
-    this.y += this.vy;
-    if (this.y > 460) {
-      this.y = 460;
-      this.vy = 0;
-      this.jump = false;
-    }
+<div id="hud">
+  Mode: <span id="gameMode">None</span> | Team: <span id="team">None</span> | Score: <span id="score">0</span> | Ball Owner: <span id="ballOwner">Player</span>
+</div>
 
-    // Attack
-    if (this.attackCooldown <= 0 && keys[this.controls.attack]) {
-      const range = {
-        x: this.x - 30,
-        y: this.y,
-        w: this.w + 60,
-        h: this.h
-      };
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 
-      if (this.rectsOverlap(range, opponent)) {
-        opponent.health -= 10;
-        sparks.push(new Spark(opponent.x + 25, opponent.y));
-      }
+// === Scene setup ===
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x081124);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+camera.position.set(0,5,12);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enablePan=false; controls.enableZoom=false;
 
-      this.attackCooldown = 30;
-    }
+// Lights
+const dirLight = new THREE.DirectionalLight(0xffffff,1);
+dirLight.position.set(10,20,10); scene.add(dirLight);
+scene.add(new THREE.AmbientLight(0x888888));
 
-    this.attackCooldown--;
-  }
+// Ground
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(25,50),
+  new THREE.MeshStandardMaterial({color:0x1e6fb6}));
+ground.rotation.x = -Math.PI/2; scene.add(ground);
 
-  rectsOverlap(r, other) {
-    return (
-      r.x < other.x + other.w &&
-      r.x + r.w > other.x &&
-      r.y < other.y + other.h &&
-      r.y + r.h > other.y
-    );
-  }
+// Goal
+const goal = new THREE.Mesh(new THREE.BoxGeometry(6,3,0.3),
+  new THREE.MeshStandardMaterial({color:0xffffff}));
+goal.position.set(0,1.5,-18); scene.add(goal);
 
-  draw() {
-    ctx.fillStyle = this.color;
-    ctx.fillRect(this.x, this.y, this.w, this.h);
-  }
+// Ball
+const ball = new THREE.Mesh(new THREE.SphereGeometry(0.25,16,16),
+  new THREE.MeshStandardMaterial({color:0xffcc00}));
+ball.position.set(0,0.25,11.2); scene.add(ball);
+
+// Keeper
+const keeper = new THREE.Mesh(new THREE.BoxGeometry(1,2,0.3),
+  new THREE.MeshStandardMaterial({color:0xff2222}));
+keeper.position.set(0,1,-17.85); scene.add(keeper);
+let keeperDir = 0.05;
+
+// Game variables
+let gameMode='None', team='None', score=0;
+let moveLeft=false, moveRight=false, ballOwner='Player', gameStarted=false;
+let playerSpeed=0.15;
+
+// Custom key bindings
+let keyLeft='ArrowLeft', keyRight='ArrowRight', keyKick='Space';
+
+// Career mode
+let careerLevel=1;
+
+// AI
+const teammates=[], opponents=[];
+
+// HUD update
+function updateHUD(){
+  document.getElementById('gameMode').innerText = gameMode;
+  document.getElementById('team').innerText = team;
+  document.getElementById('score').innerText = score;
+  document.getElementById('ballOwner').innerText = ballOwner;
+  if(gameMode==='Career'){ document.getElementById('careerLevel').innerText='Level '+careerLevel; }
 }
 
-class Spark {
-  constructor(x, y) {
-    this.x = x;
-    this.y = y;
-    this.life = 15;
-  }
-
-  draw() {
-    ctx.fillStyle = "yellow";
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, 6, 0, Math.PI * 2);
-    ctx.fill();
-    this.life--;
-  }
+// Keyboard
+function keyDownHandler(e){
+  if(!gameStarted) return;
+  if(e.code==keyLeft) moveLeft=true;
+  if(e.code==keyRight) moveRight=true;
+  if(e.code==keyKick){ ballOwner='Player'; ball.position.z-=0.5; updateHUD(); }
+}
+function keyUpHandler(e){
+  if(e.code==keyLeft) moveLeft=false;
+  if(e.code==keyRight) moveRight=false;
 }
 
-const p1 = new Fighter(100, "red", {
-  left: "KeyA",
-  right: "KeyD",
-  jump: "KeyW",
-  attack: "KeyF"
+// Start button
+document.getElementById('startButton').addEventListener('click',()=>{
+  document.getElementById('startScreen').style.display='none';
+  document.getElementById('modeSelect').style.display='flex';
 });
 
-const p2 = new Fighter(800, "blue", {
-  left: "ArrowLeft",
-  right: "ArrowRight",
-  jump: "ArrowUp",
-  attack: "Numpad1"
-});
-
-const sparks = [];
-
-function drawHealthBars() {
-  ctx.fillStyle = "red";
-  ctx.fillRect(50, 20, p1.health * 2, 15);
-  ctx.fillStyle = "blue";
-  ctx.fillRect(710, 20, p2.health * 2, 15);
+// Mode select
+function selectMode(mode){
+  gameMode = mode;
+  updateHUD();
+  document.getElementById('modeSelect').style.display='none';
+  if(mode==='Training' || mode==='Match' || mode==='Career'){
+    document.getElementById('teamSelect').style.display='flex';
+  } else {
+    setupGame(mode);
+    startGame();
+  }
 }
 
-function gameLoop() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+// Team select
+function selectTeam(selectedTeam){
+  team = selectedTeam;
+  updateHUD();
+  document.getElementById('teamSelect').style.display='none';
+  document.getElementById('keyBindScreen').style.display='flex';
+}
 
-  p1.update(p2);
-  p2.update(p1);
+// Key binding
+document.getElementById('bindLeft').addEventListener('click',()=>{ waitKey('left'); });
+document.getElementById('bindRight').addEventListener('click',()=>{ waitKey('right'); });
+document.getElementById('bindKick').addEventListener('click',()=>{ waitKey('kick'); });
+function waitKey(action){
+  document.onkeydown=(e)=>{
+    if(action==='left') keyLeft=e.code;
+    if(action==='right') keyRight=e.code;
+    if(action==='kick') keyKick=e.code;
+    document.onkeydown=null;
+  };
+}
+function finishKeyBind(){
+  document.getElementById('keyBindScreen').style.display='none';
+  setupGame(gameMode);
+  startGame();
+}
 
-  p1.draw();
-  p2.draw();
+// Career level
+function nextCareerLevel(){
+  careerLevel++;
+  setupGame('Career');
+  startGame();
+}
 
-  drawHealthBars();
+// Setup game
+function setupGame(mode){
+  // Reset ball and keeper
+  ball.position.set(0,0.25,11.2); ballOwner='Player';
+  keeper.position.set(0,1,-17.85); keeperDir=0.05;
+  updateHUD();
+  
+  // Teammates AI (2)
+  teammates.length=0;
+  for(let i=0;i<2;i++){
+    const mate = new THREE.Mesh(new THREE.BoxGeometry(0.7,1.8,0.7),
+      new THREE.MeshStandardMaterial({color:0x00ff00}));
+    mate.position.set((i-0.5)*2,0.9,7);
+    scene.add(mate); teammates.push({mesh:mate, hasBall:false});
+  }
+  
+  // Opponents AI (2)
+  opponents.length=0;
+  for(let i=0;i<2;i++){
+    const opp = new THREE.Mesh(new THREE.BoxGeometry(0.7,1.8,0.7),
+      new THREE.MeshStandardMaterial({color:0xff0000}));
+    opp.position.set((i-0.5)*2,0.9,-15);
+    scene.add(opp); opponents.push({mesh:opp, dir:0.05});
+  }
+}
 
-  // Draw sparks
-  for (let i = sparks.length - 1; i >= 0; i--) {
-    sparks[i].draw();
-    if (sparks[i].life <= 0) sparks.splice(i, 1);
+// Start game
+function startGame(){
+  gameStarted=true;
+  document.addEventListener('keydown', keyDownHandler);
+  document.addEventListener('keyup', keyUpHandler);
+}
+
+// Animate
+function animate(){
+  requestAnimationFrame(animate);
+
+  // Player movement
+  if(moveLeft) ball.position.x -= playerSpeed;
+  if(moveRight) ball.position.x += playerSpeed;
+
+  // Ball interactions
+  if(ballOwner==='Player'){
+    // Ball follows player (already moving when kick pressed)
+  } else if(ballOwner==='Teammate'){
+    teammates.forEach(t=>{
+      if(t.hasBall) ball.position.copy(t.mesh.position.clone().add(new THREE.Vector3(0,0,1)));
+    });
+  } else if(ballOwner==='Opponent'){
+    opponents.forEach(o=>{ ball.position.copy(o.mesh.position.clone().add(new THREE.Vector3(0,0,-1))); });
   }
 
-  requestAnimationFrame(gameLoop);
-}
+  // Teammates AI
+  teammates.forEach(t=>{
+    const dir = new THREE.Vector3(ball.position.x - t.mesh.position.x,0,ball.position.z - t.mesh.position.z);
+    dir.normalize();
+    t.mesh.position.x += dir.x*0.07;
+    t.mesh.position.z += dir.z*0.07;
+    if(ball.position.distanceTo(t.mesh.position)<1 && ballOwner!=='Player'){ ballOwner='Teammate'; t.hasBall=true; updateHUD(); }
+    else t.hasBall=false;
+    // Shoot if close to goal
+    if(t.hasBall && t.mesh.position.z>-16){ ball.position.z-=0.3; }
+  });
 
-gameLoop();
+  // Opponents AI
+  opponents.forEach(o=>{
+    o.mesh.position.x += o.dir;
+    if(o.mesh.position.x>2.5||o.mesh.position.x<-2.
 
-    
- 
+
