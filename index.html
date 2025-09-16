@@ -1,198 +1,148 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Simple Web RPG</title>
+  <title>2D Web RPG</title>
   <style>
     body {
       font-family: monospace;
-      background-color: #222;
+      margin: 0;
+      padding: 0;
+      background-color: #111;
       color: #eee;
-      max-width: 600px;
-      margin: 20px auto;
-      padding: 10px;
-      border: 2px solid #444;
-      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
+
+    #game-container {
+      position: relative;
+      width: 320px;
+      height: 320px;
+      background-image: url('https://i.imgur.com/3e5pBGA.png'); /* Tile background */
+      background-size: 32px 32px;
+      border: 4px solid #444;
+      margin-top: 20px;
+    }
+
+    .sprite {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      image-rendering: pixelated;
+    }
+
+    #player {
+      left: 64px;
+      top: 64px;
+    }
+
+    #enemy {
+      left: 192px;
+      top: 192px;
+      display: none;
+    }
+
+    #ui {
+      max-width: 600px;
+      margin-top: 10px;
+      padding: 10px;
+      background-color: #222;
+      border-radius: 8px;
+      border: 2px solid #444;
+    }
+
     button {
       background-color: #444;
       color: #eee;
       border: none;
-      padding: 10px 15px;
-      margin: 5px 0;
+      padding: 8px 12px;
       font-size: 16px;
       cursor: pointer;
       border-radius: 5px;
+      margin: 5px 5px 0 0;
     }
-    button:hover {
-      background-color: #666;
-    }
+
     #log {
-      white-space: pre-wrap;
+      margin-top: 10px;
       background-color: #111;
-      padding: 10px;
-      height: 300px;
+      height: 120px;
       overflow-y: scroll;
+      padding: 8px;
       border-radius: 5px;
-      margin-bottom: 10px;
-    }
-    #stats {
-      margin-bottom: 10px;
-    }
-    #characterImage {
-      width: 100%;
-      max-height: 300px;
-      object-fit: contain;
-      border-radius: 8px;
-      margin-bottom: 10px;
-      display: none; /* Hidden by default */
+      white-space: pre-wrap;
     }
   </style>
 </head>
 <body>
-  <h1>Simple Web RPG</h1>
-  <div>
-    <label for="playerSelect">Choose your player:</label>
-    <select id="playerSelect">
-      <option value="hero">Hero</option>
-      <option value="the67kid">The 67 Kid</option>
-    </select>
-    <button id="startBtn">Start Game</button>
+  <h1>🕹️ 2D Web RPG</h1>
+
+  <div id="game-container">
+    <img id="player" class="sprite" src="https://i.imgur.com/ksQmN0b.png" alt="Player" />
+    <img id="enemy" class="sprite" src="https://i.imgur.com/UkGyB2Z.png" alt="Enemy" />
   </div>
 
-  <img id="characterImage" src="" alt="Character Image" />
-
-  <div id="stats"></div>
-  <div id="log"></div>
-  <button id="attackBtn" disabled>Attack Enemy</button>
+  <div id="ui">
+    <div>
+      <button id="fightBtn">Start Battle</button>
+      <button id="attackBtn" disabled>Attack</button>
+    </div>
+    <div id="log">Welcome to the 2D RPG!</div>
+  </div>
 
   <script>
-    let player = null;
+    const logDiv = document.getElementById("log");
+    const playerSprite = document.getElementById("player");
+    const enemySprite = document.getElementById("enemy");
+    const attackBtn = document.getElementById("attackBtn");
+    const fightBtn = document.getElementById("fightBtn");
 
-    const playersData = {
-      hero: {
-        name: "Hero",
-        health: 100,
-        attack: 12,
-        experience: 0,
-        level: 1,
-        image: "" // no image for hero
-      },
-      the67kid: {
-        name: "The 67 Kid",
-        health: 120,
-        attack: 10,
-        experience: 0,
-        level: 1,
-        image: "https://www.tiktok.com/api/img/?itemId=7546986777655954710&location=0&aid=1988"
-      }
+    const player = {
+      name: "The 67 Kid",
+      health: 100,
+      attack: 12
     };
 
-    let enemies = [
-      { name: "Goblin", health: 30, attack: 5 },
-      { name: "Orc", health: 50, attack: 8 },
-      { name: "Dragon", health: 100, attack: 15 }
-    ];
-
-    let currentEnemy = null;
-
-    const statsDiv = document.getElementById("stats");
-    const logDiv = document.getElementById("log");
-    const attackBtn = document.getElementById("attackBtn");
-    const startBtn = document.getElementById("startBtn");
-    const playerSelect = document.getElementById("playerSelect");
-    const characterImage = document.getElementById("characterImage");
-
-    function updateStats() {
-      statsDiv.textContent =
-        `Player: ${player.name} | HP: ${player.health} | Level: ${player.level} | XP: ${player.experience}\n` +
-        (currentEnemy ? `Enemy: ${currentEnemy.name} | HP: ${currentEnemy.health}` : "No enemy");
-    }
+    const enemy = {
+      name: "Goblin",
+      health: 50,
+      attack: 6
+    };
 
     function log(message) {
-      logDiv.textContent += message + "\n";
+      logDiv.textContent += "\n" + message;
       logDiv.scrollTop = logDiv.scrollHeight;
     }
 
-    function randomDamage(base) {
-      return Math.floor(base - 2 + Math.random() * 5);
-    }
-
-    function levelUp() {
-      player.level++;
-      player.health += 20;
-      player.attack += 5;
-      player.experience = 0;
-      log(`🎉 You leveled up! You are now level ${player.level}!`);
-    }
-
-    function nextEnemy() {
-      if (enemies.length === 0) {
-        log("🏆 You defeated all enemies! You win!");
-        attackBtn.disabled = true;
-        return;
-      }
-      currentEnemy = enemies.shift();
-      log(`⚔️ A wild ${currentEnemy.name} appears!`);
-      updateStats();
-    }
+    fightBtn.onclick = () => {
+      log(`⚔️ A wild ${enemy.name} appears!`);
+      enemy.health = 50;
+      attackBtn.disabled = false;
+      enemySprite.style.display = "block";
+    };
 
     attackBtn.onclick = () => {
-      if (!currentEnemy) {
-        nextEnemy();
+      // Player attacks
+      const playerDamage = Math.floor(Math.random() * player.attack) + 5;
+      enemy.health -= playerDamage;
+      log(`You hit the ${enemy.name} for ${playerDamage} damage.`);
+
+      if (enemy.health <= 0) {
+        log(`🎉 You defeated the ${enemy.name}!`);
+        attackBtn.disabled = true;
+        enemySprite.style.display = "none";
         return;
       }
 
-      let damage = randomDamage(player.attack);
-      currentEnemy.health -= damage;
-      log(`You hit ${currentEnemy.name} for ${damage} damage.`);
-
-      if (currentEnemy.health <= 0) {
-        log(`You defeated the ${currentEnemy.name}!`);
-        player.experience += 20;
-
-        if (player.experience >= 40) {
-          levelUp();
-        }
-
-        currentEnemy = null;
-        updateStats();
-        nextEnemy();
-        return;
-      }
-
-      damage = randomDamage(currentEnemy.attack);
-      player.health -= damage;
-      log(`${currentEnemy.name} hits you for ${damage} damage.`);
+      // Enemy attacks
+      const enemyDamage = Math.floor(Math.random() * enemy.attack) + 3;
+      player.health -= enemyDamage;
+      log(`${enemy.name} hits you for ${enemyDamage} damage.`);
 
       if (player.health <= 0) {
         log("💀 You have been defeated... Game Over.");
         attackBtn.disabled = true;
-      }
-
-      updateStats();
-    };
-
-    startBtn.onclick = () => {
-      const selected = playerSelect.value;
-      player = JSON.parse(JSON.stringify(playersData[selected]));
-      enemies = [
-        { name: "Goblin", health: 30, attack: 5 },
-        { name: "Orc", health: 50, attack: 8 },
-        { name: "Dragon", health: 100, attack: 15 }
-      ];
-      currentEnemy = null;
-      attackBtn.disabled = false;
-      logDiv.textContent = "";
-      log(`Welcome, ${player.name}! Click 'Attack Enemy' to begin your quest.`);
-      updateStats();
-
-      if (player.image) {
-        characterImage.src = player.image;
-        characterImage.style.display = "block";
-      } else {
-        characterImage.style.display = "none";
       }
     };
   </script>
