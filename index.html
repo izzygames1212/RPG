@@ -1,150 +1,123 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>2D Web RPG</title>
-  <style>
-    body {
-      font-family: monospace;
-      margin: 0;
-      padding: 0;
-      background-color: #111;
-      color: #eee;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-    }
+  <head>
+    <meta charset="utf-8" />
+    <title>3D Web RPG</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        font-family: monospace;
+        background-color: #000;
+        color: white;
+      }
+      #log {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.6);
+        padding: 10px;
+        border-radius: 5px;
+        max-width: 300px;
+        font-size: 14px;
+        z-index: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="log">Use WASD to move</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r148/three.min.js"></script>
+    <script>
+      // Setup scene
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x222831);
 
-    #game-container {
-      position: relative;
-      width: 320px;
-      height: 320px;
-      background-image: url('https://i.imgur.com/3e5pBGA.png'); /* Tile background */
-      background-size: 32px 32px;
-      border: 4px solid #444;
-      margin-top: 20px;
-    }
+      // Camera
+      const camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+      camera.position.set(0, 5, 10);
 
-    .sprite {
-      position: absolute;
-      width: 32px;
-      height: 32px;
-      image-rendering: pixelated;
-    }
+      // Renderer
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
 
-    #player {
-      left: 64px;
-      top: 64px;
-    }
+      // Light
+      const light = new THREE.DirectionalLight(0xffffff, 1);
+      light.position.set(5, 10, 7.5);
+      scene.add(light);
 
-    #enemy {
-      left: 192px;
-      top: 192px;
-      display: none;
-    }
+      // Ground (grass)
+      const groundGeo = new THREE.PlaneGeometry(50, 50);
+      const groundMat = new THREE.MeshPhongMaterial({ color: 0x4caf50 });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.receiveShadow = true;
+      scene.add(ground);
 
-    #ui {
-      max-width: 600px;
-      margin-top: 10px;
-      padding: 10px;
-      background-color: #222;
-      border-radius: 8px;
-      border: 2px solid #444;
-    }
+      // Player (The 67 Kid cube)
+      const playerGeometry = new THREE.BoxGeometry(1, 2, 1);
+      const playerMaterial = new THREE.MeshPhongMaterial({ color: 0x2196f3 });
+      const player = new THREE.Mesh(playerGeometry, playerMaterial);
+      player.position.y = 1; // So it sits on ground
+      scene.add(player);
 
-    button {
-      background-color: #444;
-      color: #eee;
-      border: none;
-      padding: 8px 12px;
-      font-size: 16px;
-      cursor: pointer;
-      border-radius: 5px;
-      margin: 5px 5px 0 0;
-    }
+      // Enemy (red cube)
+      const enemyGeometry = new THREE.BoxGeometry(1, 2, 1);
+      const enemyMaterial = new THREE.MeshPhongMaterial({ color: 0xff5252 });
+      const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+      enemy.position.set(5, 1, 0);
+      scene.add(enemy);
 
-    #log {
-      margin-top: 10px;
-      background-color: #111;
-      height: 120px;
-      overflow-y: scroll;
-      padding: 8px;
-      border-radius: 5px;
-      white-space: pre-wrap;
-    }
-  </style>
-</head>
-<body>
-  <h1>🕹️ 2D Web RPG</h1>
+      // Movement
+      const keys = {};
+      document.addEventListener("keydown", (e) => (keys[e.key.toLowerCase()] = true));
+      document.addEventListener("keyup", (e) => (keys[e.key.toLowerCase()] = false));
 
-  <div id="game-container">
-    <img id="player" class="sprite" src="https://i.imgur.com/ksQmN0b.png" alt="Player" />
-    <img id="enemy" class="sprite" src="https://i.imgur.com/UkGyB2Z.png" alt="Enemy" />
-  </div>
-
-  <div id="ui">
-    <div>
-      <button id="fightBtn">Start Battle</button>
-      <button id="attackBtn" disabled>Attack</button>
-    </div>
-    <div id="log">Welcome to the 2D RPG!</div>
-  </div>
-
-  <script>
-    const logDiv = document.getElementById("log");
-    const playerSprite = document.getElementById("player");
-    const enemySprite = document.getElementById("enemy");
-    const attackBtn = document.getElementById("attackBtn");
-    const fightBtn = document.getElementById("fightBtn");
-
-    const player = {
-      name: "The 67 Kid",
-      health: 100,
-      attack: 12
-    };
-
-    const enemy = {
-      name: "Goblin",
-      health: 50,
-      attack: 6
-    };
-
-    function log(message) {
-      logDiv.textContent += "\n" + message;
-      logDiv.scrollTop = logDiv.scrollHeight;
-    }
-
-    fightBtn.onclick = () => {
-      log(`⚔️ A wild ${enemy.name} appears!`);
-      enemy.health = 50;
-      attackBtn.disabled = false;
-      enemySprite.style.display = "block";
-    };
-
-    attackBtn.onclick = () => {
-      // Player attacks
-      const playerDamage = Math.floor(Math.random() * player.attack) + 5;
-      enemy.health -= playerDamage;
-      log(`You hit the ${enemy.name} for ${playerDamage} damage.`);
-
-      if (enemy.health <= 0) {
-        log(`🎉 You defeated the ${enemy.name}!`);
-        attackBtn.disabled = true;
-        enemySprite.style.display = "none";
-        return;
+      function movePlayer() {
+        const speed = 0.1;
+        if (keys["w"]) player.position.z -= speed;
+        if (keys["s"]) player.position.z += speed;
+        if (keys["a"]) player.position.x -= speed;
+        if (keys["d"]) player.position.x += speed;
       }
 
-      // Enemy attacks
-      const enemyDamage = Math.floor(Math.random() * enemy.attack) + 3;
-      player.health -= enemyDamage;
-      log(`${enemy.name} hits you for ${enemyDamage} damage.`);
-
-      if (player.health <= 0) {
-        log("💀 You have been defeated... Game Over.");
-        attackBtn.disabled = true;
+      // Camera follows player
+      function updateCamera() {
+        camera.position.x = player.position.x;
+        camera.position.z = player.position.z + 10;
+        camera.lookAt(player.position);
       }
-    };
-  </script>
-</body>
+
+      // Basic enemy collision
+      function checkCollision() {
+        const distance = player.position.distanceTo(enemy.position);
+        if (distance < 1.5) {
+          document.getElementById("log").textContent = "⚔️ You encountered the enemy!";
+        }
+      }
+
+      // Main loop
+      function animate() {
+        requestAnimationFrame(animate);
+        movePlayer();
+        updateCamera();
+        checkCollision();
+        renderer.render(scene, camera);
+      }
+
+      animate();
+
+      // Handle resize
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    </script>
+  </body>
 </html>
